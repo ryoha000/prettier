@@ -91,6 +91,35 @@ class Node {
     return new Node(overrides ? { ...this, ...overrides } : this);
   }
 
+  /**
+   * @param {Object} [overrides]
+   */
+  childClone(overrides) {
+    console.log("fire childClone");
+    const res = new Node(overrides ? { ...this, ...overrides } : this);
+    // @ts-ignore
+    const { index, siblings, prev, next, parent } = this;
+    setNonEnumerableProperties(res, {
+      index,
+      siblings,
+      prev,
+      next,
+      parent,
+    });
+    return res;
+  }
+
+  setId() {
+    let i = 0;
+    this.walk((node) => {
+      node.id = i;
+      i++;
+    });
+    this.walk((node) => {
+      Object.assign(node, { parent: node.parent ? node.parent.id : null });
+    });
+  }
+
   get firstChild() {
     // @ts-ignore
     return isNonEmptyArray(this.children) ? this.children[0] : null;
@@ -148,7 +177,7 @@ function setNonEnumerableProperties(obj, props) {
   const descriptors = Object.fromEntries(
     Object.entries(props).map(([key, value]) => [
       key,
-      { value, enumerable: false },
+      { value, enumerable: false, configurable: true, writable: true },
     ])
   );
 

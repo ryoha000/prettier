@@ -1,5 +1,6 @@
 "use strict";
 
+const assert = require("assert");
 const {
   ParseSourceSpan,
 } = require("angular-html-parser/lib/compiler/src/parse_util");
@@ -99,7 +100,7 @@ function mergeIeConditonalStartEndCommentIntoElementOpeningTagWalk(
             );
 
             newChildren.push(
-              child.clone({
+              child.childClone({
                 condition: ieConditionalStartComment.condition,
                 sourceSpan,
                 startSourceSpan,
@@ -136,7 +137,7 @@ function mergeNodeIntoTextWalk(ast, shouldMerge, getValue) {
           const newChild =
             child.type === "text"
               ? child
-              : child.clone({ type: "text", value: getValue(child) });
+              : child.childClone({ type: "text", value: getValue(child) });
 
           if (
             newChildren.length === 0 ||
@@ -148,7 +149,7 @@ function mergeNodeIntoTextWalk(ast, shouldMerge, getValue) {
 
           const lastChild = newChildren.pop();
           newChildren.push(
-            lastChild.clone({
+            lastChild.childClone({
               value: lastChild.value + newChild.value,
               sourceSpan: new ParseSourceSpan(
                 lastChild.sourceSpan.start,
@@ -200,7 +201,7 @@ function mergeSimpleElementIntoTextWalk(ast /*, options */) {
             const nextChild = node.children[++i];
             const { isTrailingSpaceSensitive, hasTrailingSpaces } = nextChild;
             newChildren.push(
-              lastChild.clone({
+              lastChild.childClone({
                 value:
                   lastChild.value +
                   `<${child.rawName}>` +
@@ -258,7 +259,7 @@ function extractInterpolationWalk(ast, options) {
           endSourceSpan = startSourceSpan.moveBy(value.length);
           if (value.length > 0) {
             newChildren.push(
-              child.clone({
+              child.childClone({
                 type: "text",
                 value,
                 sourceSpan: new ParseSourceSpan(startSourceSpan, endSourceSpan),
@@ -270,7 +271,7 @@ function extractInterpolationWalk(ast, options) {
 
         endSourceSpan = startSourceSpan.moveBy(value.length + 4); // `{{` + `}}`
         newChildren.push(
-          child.clone({
+          child.childClone({
             type: "interpolation",
             sourceSpan: new ParseSourceSpan(startSourceSpan, endSourceSpan),
             children:
@@ -343,14 +344,16 @@ function extractWhitespacesWalk(ast /*, options*/) {
           }
 
           if (text) {
-            localChildren.push({
-              type: "text",
-              value: text,
-              sourceSpan: new ParseSourceSpan(
-                child.sourceSpan.start.moveBy(leadingWhitespace.length),
-                child.sourceSpan.end.moveBy(-trailingWhitespace.length)
-              ),
-            });
+            localChildren.push(
+              child.childClone({
+                type: "text",
+                value: text,
+                sourceSpan: new ParseSourceSpan(
+                  child.sourceSpan.start.moveBy(leadingWhitespace.length),
+                  child.sourceSpan.end.moveBy(-trailingWhitespace.length)
+                ),
+              })
+            );
           }
 
           if (trailingWhitespace) {
@@ -473,11 +476,38 @@ const PREPROCESS_PIPELINE = [
 ];
 
 function preprocess(ast, options) {
+  // const tmpAst = ast.map((node) => node);
+  // setupDeepCompare(tmpAst);
+  // tmpAst.walk((node) => console.log(node));
+
+  const walkAst = ast.map((node) => node);
+  for (const fn of PREPROCESS_PIPELINE_WALK) {
+    fn(walkAst, options);
+  }
+  walkAst.setId();
+  setupDeepCompare(walkAst);
+  // walkAst.walk((node) => console.log(node));
+
   for (const fn of PREPROCESS_PIPELINE) {
     ast = fn(ast, options);
   }
-  return ast;
+  const res = ast.map((node) => node);
+  ast.setId();
+  setupDeepCompare(ast);
+  ast.walk((node) => console.log(node));
+
+  // assert.deepStrictEqual(walkAst, ast);
+  return res;
 }
+
+const setupDeepCompare = (ast) => {
+  ast.walk((node) => {
+    const keys = Object.getOwnPropertyNames(node);
+    for (const key of keys) {
+      Object.defineProperty(node, key, { value: node[key], enumerable: true });
+    }
+  });
+};
 
 function removeIgnorableFirstLf(ast /*, options */) {
   return ast.map((node) => {
