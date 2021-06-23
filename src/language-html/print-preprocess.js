@@ -17,28 +17,28 @@ const {
   isWhitespaceSensitiveNode,
 } = require("./utils");
 
-const PREPROCESS_PIPELINE = [
-  removeIgnorableFirstLf,
-  mergeIeConditonalStartEndCommentIntoElementOpeningTag,
-  mergeCdataIntoText,
-  extractInterpolation,
-  extractWhitespaces,
-  addCssDisplay,
-  addIsSelfClosing,
-  addHasHtmComponentClosingTag,
-  addIsSpaceSensitive,
-  mergeSimpleElementIntoText,
+const PREPROCESS_PIPELINE_WALK = [
+  removeIgnorableFirstLfWalk,
+  mergeIeConditonalStartEndCommentIntoElementOpeningTagWalk,
+  mergeCdataIntoTextWalk,
+  extractInterpolationWalk,
+  extractWhitespacesWalk,
+  addCssDisplayWalk,
+  addIsSelfClosingWalk,
+  addHasHtmComponentClosingTagWalk,
+  addIsSpaceSensitiveWalk,
+  mergeSimpleElementIntoTextWalk,
 ];
 
-function preprocess(ast, options) {
+function preprocessWalk(ast, options) {
   const res = ast.map((node) => node);
-  for (const fn of PREPROCESS_PIPELINE) {
+  for (const fn of PREPROCESS_PIPELINE_WALK) {
     fn(res, options);
   }
   return res;
 }
 
-function removeIgnorableFirstLf(ast /*, options */) {
+function removeIgnorableFirstLfWalk(ast /*, options */) {
   ast.walk((node) => {
     if (
       node.type === "element" &&
@@ -57,7 +57,7 @@ function removeIgnorableFirstLf(ast /*, options */) {
   });
 }
 
-function mergeIeConditonalStartEndCommentIntoElementOpeningTag(
+function mergeIeConditonalStartEndCommentIntoElementOpeningTagWalk(
   ast /*, options */
 ) {
   /**
@@ -119,7 +119,7 @@ function mergeIeConditonalStartEndCommentIntoElementOpeningTag(
   });
 }
 
-function mergeNodeIntoText(ast, shouldMerge, getValue) {
+function mergeNodeIntoTextWalk(ast, shouldMerge, getValue) {
   ast.walk((node) => {
     if (node.children) {
       const shouldMergeResults = node.children.map(shouldMerge);
@@ -163,15 +163,15 @@ function mergeNodeIntoText(ast, shouldMerge, getValue) {
   });
 }
 
-function mergeCdataIntoText(ast /*, options */) {
-  return mergeNodeIntoText(
+function mergeCdataIntoTextWalk(ast /*, options */) {
+  return mergeNodeIntoTextWalk(
     ast,
     (node) => node.type === "cdata",
     (node) => `<![CDATA[${node.value}]]>`
   );
 }
 
-function mergeSimpleElementIntoText(ast /*, options */) {
+function mergeSimpleElementIntoTextWalk(ast /*, options */) {
   const isSimpleElement = (node) =>
     node.type === "element" &&
     node.attrs.length === 0 &&
@@ -225,7 +225,7 @@ function mergeSimpleElementIntoText(ast /*, options */) {
   });
 }
 
-function extractInterpolation(ast, options) {
+function extractInterpolationWalk(ast, options) {
   if (options.parser === "html") {
     return;
   }
@@ -302,8 +302,8 @@ function extractInterpolation(ast, options) {
  * - add `isWhitespaceSensitive`, `isIndentationSensitive` field for text nodes
  * - remove insensitive whitespaces
  */
-const WHITESPACE_NODE = { type: "whitespace" };
-function extractWhitespaces(ast /*, options*/) {
+const WHITESPACE_NODE_WALK = { type: "whitespace" };
+function extractWhitespacesWalk(ast /*, options*/) {
   ast.walk((node) => {
     if (!node.children) {
       return;
@@ -339,7 +339,7 @@ function extractWhitespaces(ast /*, options*/) {
             getLeadingAndTrailingHtmlWhitespace(child.value);
 
           if (leadingWhitespace) {
-            localChildren.push(WHITESPACE_NODE);
+            localChildren.push(WHITESPACE_NODE_WALK);
           }
 
           if (text) {
@@ -354,21 +354,21 @@ function extractWhitespaces(ast /*, options*/) {
           }
 
           if (trailingWhitespace) {
-            localChildren.push(WHITESPACE_NODE);
+            localChildren.push(WHITESPACE_NODE_WALK);
           }
 
           return localChildren;
         })
         // set hasLeadingSpaces/hasTrailingSpaces
         .map((child, index, children) => {
-          if (child === WHITESPACE_NODE) {
+          if (child === WHITESPACE_NODE_WALK) {
             return;
           }
 
           return {
             ...child,
-            hasLeadingSpaces: children[index - 1] === WHITESPACE_NODE,
-            hasTrailingSpaces: children[index + 1] === WHITESPACE_NODE,
+            hasLeadingSpaces: children[index - 1] === WHITESPACE_NODE_WALK,
+            hasTrailingSpaces: children[index + 1] === WHITESPACE_NODE_WALK,
           };
         })
         // filter whitespace nodes
@@ -380,7 +380,7 @@ function extractWhitespaces(ast /*, options*/) {
   });
 }
 
-function addIsSelfClosing(ast /*, options */) {
+function addIsSelfClosingWalk(ast /*, options */) {
   ast.walk((node) =>
     Object.assign(node, {
       isSelfClosing:
@@ -393,7 +393,7 @@ function addIsSelfClosing(ast /*, options */) {
   );
 }
 
-function addHasHtmComponentClosingTag(ast, options) {
+function addHasHtmComponentClosingTagWalk(ast, options) {
   ast.walk((node) =>
     node.type !== "element"
       ? node
@@ -410,7 +410,7 @@ function addHasHtmComponentClosingTag(ast, options) {
   );
 }
 
-function addCssDisplay(ast, options) {
+function addCssDisplayWalk(ast, options) {
   ast.walk((node) =>
     Object.assign(node, { cssDisplay: getNodeCssStyleDisplay(node, options) })
   );
@@ -421,7 +421,7 @@ function addCssDisplay(ast, options) {
  * - add `isTrailingSpaceSensitive` field
  * - add `isDanglingSpaceSensitive` field for parent nodes
  */
-function addIsSpaceSensitive(ast, options) {
+function addIsSpaceSensitiveWalk(ast, options) {
   ast.walk((node) => {
     if (!node.children) {
       return;
