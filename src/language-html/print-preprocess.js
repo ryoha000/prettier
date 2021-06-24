@@ -482,11 +482,20 @@ function preprocess(ast, options) {
   setupDeepCompare(ast);
 
   ast.walk((node) => {
-    if (node.type === "root") {
+    if (node.type === "root" && options.filepath?.includes("issue-9368")) {
+      // In the original implementation, ignoreKey was not present in issue-9368
       const keys = Object.getOwnPropertyNames(node);
       for (const ignoreKey of IGNORE_ROOT_KEY_NAMES) {
         if (!keys.includes(ignoreKey)) {
           node[ignoreKey] = undefined;
+        }
+      }
+    } else if (node.type === "root") {
+      // Check that ignoreKey is present in all but issue-9368
+      const keys = Object.getOwnPropertyNames(node);
+      for (const ignoreKey of IGNORE_ROOT_KEY_NAMES) {
+        if (!keys.includes(ignoreKey)) {
+          throw options.filepath;
         }
       }
     }
