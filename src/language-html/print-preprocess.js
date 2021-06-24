@@ -48,12 +48,12 @@ function removeIgnorableFirstLfWalk(ast /*, options */) {
       node.children[0].type === "text" &&
       node.children[0].value[0] === "\n"
     ) {
-      const text = node.children[0];
-      if (text.value.length === 1) {
-        node.children.shift();
-      } else {
-        node.children[0].value = text.value.slice(1);
-      }
+      const [text, ...rest] = node.children;
+      node.setChildren(
+        text.value.length === 1
+          ? rest
+          : [text.clone({ value: text.value.slice(1) }), ...rest]
+      );
     }
   });
 }
@@ -258,37 +258,33 @@ function extractInterpolationWalk(ast, options) {
         if (i % 2 === 0) {
           endSourceSpan = startSourceSpan.moveBy(value.length);
           if (value.length > 0) {
-            newChildren.push(
-              child.clone({
-                type: "text",
-                value,
-                sourceSpan: new ParseSourceSpan(startSourceSpan, endSourceSpan),
-              })
-            );
+            newChildren.push({
+              type: "text",
+              value,
+              sourceSpan: new ParseSourceSpan(startSourceSpan, endSourceSpan),
+            });
           }
           continue;
         }
 
         endSourceSpan = startSourceSpan.moveBy(value.length + 4); // `{{` + `}}`
-        newChildren.push(
-          child.clone({
-            type: "interpolation",
-            sourceSpan: new ParseSourceSpan(startSourceSpan, endSourceSpan),
-            children:
-              value.length === 0
-                ? []
-                : [
-                    {
-                      type: "text",
-                      value,
-                      sourceSpan: new ParseSourceSpan(
-                        startSourceSpan.moveBy(2),
-                        endSourceSpan.moveBy(-2)
-                      ),
-                    },
-                  ],
-          })
-        );
+        newChildren.push({
+          type: "interpolation",
+          sourceSpan: new ParseSourceSpan(startSourceSpan, endSourceSpan),
+          children:
+            value.length === 0
+              ? []
+              : [
+                  {
+                    type: "text",
+                    value,
+                    sourceSpan: new ParseSourceSpan(
+                      startSourceSpan.moveBy(2),
+                      endSourceSpan.moveBy(-2)
+                    ),
+                  },
+                ],
+        });
       }
     }
 
@@ -490,13 +486,7 @@ function preprocess(ast, options) {
     }
   });
   // return walkAst;
-  walkAst.setId();
   setupDeepCompare(walkAst);
-  // console.log(walkAst);
-  // walkAst.walk((node) => {
-  //   console.log(node);
-  //   console.log("\n\n");
-  // });
 
   for (const fn of PREPROCESS_PIPELINE) {
     ast = fn(ast, options);
@@ -509,13 +499,7 @@ function preprocess(ast, options) {
       }
     }
   });
-  ast.setId();
   setupDeepCompare(ast);
-  // console.log(ast);
-  // ast.walk((node) => {
-  //   console.log(node);
-  //   console.log("\n\n");
-  // });
 
   assert.deepStrictEqual(walkAst, ast);
   return res;

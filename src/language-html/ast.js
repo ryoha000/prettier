@@ -98,17 +98,6 @@ class Node {
     this._setNodes("children", children);
   }
 
-  setId() {
-    let i = 0;
-    this.walk((node) => {
-      node.id = i;
-      i++;
-    });
-    this.walk((node) => {
-      Object.assign(node, { parent: node.parent ? node.parent.id : null });
-    });
-  }
-
   get firstChild() {
     // @ts-ignore
     return isNonEmptyArray(this.children) ? this.children[0] : null;
