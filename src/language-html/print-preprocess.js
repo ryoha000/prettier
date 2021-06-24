@@ -338,16 +338,14 @@ function extractWhitespacesWalk(ast /*, options*/) {
           }
 
           if (text) {
-            localChildren.push(
-              child.clone({
-                type: "text",
-                value: text,
-                sourceSpan: new ParseSourceSpan(
-                  child.sourceSpan.start.moveBy(leadingWhitespace.length),
-                  child.sourceSpan.end.moveBy(-trailingWhitespace.length)
-                ),
-              })
-            );
+            localChildren.push({
+              type: "text",
+              value: text,
+              sourceSpan: new ParseSourceSpan(
+                child.sourceSpan.start.moveBy(leadingWhitespace.length),
+                child.sourceSpan.end.moveBy(-trailingWhitespace.length)
+              ),
+            });
           }
 
           if (trailingWhitespace) {
@@ -468,41 +466,34 @@ const PREPROCESS_PIPELINE = [
   mergeSimpleElementIntoText,
 ];
 
-const KEY_NAMES = ["i18n", "index", "parent", "prev", "next", "siblings"];
-function preprocess(ast, options) {
-  // const tmpAst = ast.map((node) => node);
-  // setupDeepCompare(tmpAst);
-  // tmpAst.walk((node) => console.log(node));
+const IGNORE_ROOT_KEY_NAMES = ["index", "parent", "prev", "next", "siblings"];
 
+function preprocess(ast, options) {
   const walkAst = ast.map((node) => node);
+
   for (const fn of PREPROCESS_PIPELINE_WALK) {
     fn(walkAst, options);
   }
-  walkAst.walk((node) => {
-    for (const key of KEY_NAMES) {
-      if (node[key] === undefined) {
-        node[key] = undefined;
-      }
-    }
-  });
-  // return walkAst;
   setupDeepCompare(walkAst);
 
   for (const fn of PREPROCESS_PIPELINE) {
     ast = fn(ast, options);
   }
-  const res = ast.map((node) => node);
+  setupDeepCompare(ast);
+
   ast.walk((node) => {
-    for (const key of KEY_NAMES) {
-      if (node[key] === undefined) {
-        node[key] = undefined;
+    if (node.type === "root") {
+      const keys = Object.getOwnPropertyNames(node);
+      for (const ignoreKey of IGNORE_ROOT_KEY_NAMES) {
+        if (!keys.includes(ignoreKey)) {
+          node[ignoreKey] = undefined;
+        }
       }
     }
   });
-  setupDeepCompare(ast);
 
   assert.deepStrictEqual(walkAst, ast);
-  return res;
+  return ast;
 }
 
 const setupDeepCompare = (ast) => {
