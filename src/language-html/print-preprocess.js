@@ -1,5 +1,7 @@
 "use strict";
 
+const assert = require("assert");
+
 const {
   ParseSourceSpan,
 } = require("angular-html-parser/lib/compiler/src/parse_util");
@@ -30,13 +32,50 @@ const PREPROCESS_PIPELINE = [
   mergeSimpleElementIntoText,
 ];
 
+const IGNORE_ROOT_KEY_NAMES = ["index", "parent", "prev", "next", "siblings"];
+
 function preprocess(ast, options) {
   const res = ast.map((node) => node);
   for (const fn of PREPROCESS_PIPELINE) {
     fn(res, options);
   }
+  setupDeepCompare(res);
+
+  const originalAst = preprocessOriginal(ast, options);
+  setupDeepCompare(originalAst);
+
+  originalAst.walk((node) => {
+    if (node.type === "root" && options.filepath?.includes("issue-9368")) {
+      // In the original implementation, ignoreKey was not present in issue-9368
+      const keys = Object.getOwnPropertyNames(node);
+      for (const ignoreKey of IGNORE_ROOT_KEY_NAMES) {
+        if (!keys.includes(ignoreKey)) {
+          node[ignoreKey] = undefined;
+        }
+      }
+    } else if (node.type === "root") {
+      // Check that ignoreKey is present in all but issue-9368
+      const keys = Object.getOwnPropertyNames(node);
+      for (const ignoreKey of IGNORE_ROOT_KEY_NAMES) {
+        if (!keys.includes(ignoreKey)) {
+          throw "never get here";
+        }
+      }
+    }
+  });
+
+  assert.deepStrictEqual(res, originalAst);
   return res;
 }
+
+const setupDeepCompare = (ast) => {
+  ast.walk((node) => {
+    const keys = Object.getOwnPropertyNames(node);
+    for (const key of keys) {
+      Object.defineProperty(node, key, { value: node[key], enumerable: true });
+    }
+  });
+};
 
 function removeIgnorableFirstLf(ast /*, options */) {
   ast.walk((node) => {
