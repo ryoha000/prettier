@@ -100,7 +100,7 @@ function mergeIeConditonalStartEndCommentIntoElementOpeningTagWalk(
             );
 
             newChildren.push(
-              child.childClone({
+              child.clone({
                 condition: ieConditionalStartComment.condition,
                 sourceSpan,
                 startSourceSpan,
@@ -114,7 +114,7 @@ function mergeIeConditonalStartEndCommentIntoElementOpeningTagWalk(
           newChildren.push(child);
         }
 
-        node.children = node.clone({ children: newChildren }).children;
+        node.setChildren(newChildren);
       }
     }
   });
@@ -137,7 +137,7 @@ function mergeNodeIntoTextWalk(ast, shouldMerge, getValue) {
           const newChild =
             child.type === "text"
               ? child
-              : child.childClone({ type: "text", value: getValue(child) });
+              : child.clone({ type: "text", value: getValue(child) });
 
           if (
             newChildren.length === 0 ||
@@ -149,7 +149,7 @@ function mergeNodeIntoTextWalk(ast, shouldMerge, getValue) {
 
           const lastChild = newChildren.pop();
           newChildren.push(
-            lastChild.childClone({
+            lastChild.clone({
               value: lastChild.value + newChild.value,
               sourceSpan: new ParseSourceSpan(
                 lastChild.sourceSpan.start,
@@ -158,7 +158,7 @@ function mergeNodeIntoTextWalk(ast, shouldMerge, getValue) {
             })
           );
         }
-        node.children = node.clone({ children: newChildren }).children;
+        node.setChildren(newChildren);
       }
     }
   });
@@ -201,7 +201,7 @@ function mergeSimpleElementIntoTextWalk(ast /*, options */) {
             const nextChild = node.children[++i];
             const { isTrailingSpaceSensitive, hasTrailingSpaces } = nextChild;
             newChildren.push(
-              lastChild.childClone({
+              lastChild.clone({
                 value:
                   lastChild.value +
                   `<${child.rawName}>` +
@@ -220,7 +220,7 @@ function mergeSimpleElementIntoTextWalk(ast /*, options */) {
             newChildren.push(child);
           }
         }
-        node.children = node.clone({ children: newChildren }).children;
+        node.setChildren(newChildren);
       }
     }
   });
@@ -259,7 +259,7 @@ function extractInterpolationWalk(ast, options) {
           endSourceSpan = startSourceSpan.moveBy(value.length);
           if (value.length > 0) {
             newChildren.push(
-              child.childClone({
+              child.clone({
                 type: "text",
                 value,
                 sourceSpan: new ParseSourceSpan(startSourceSpan, endSourceSpan),
@@ -271,7 +271,7 @@ function extractInterpolationWalk(ast, options) {
 
         endSourceSpan = startSourceSpan.moveBy(value.length + 4); // `{{` + `}}`
         newChildren.push(
-          child.childClone({
+          child.clone({
             type: "interpolation",
             sourceSpan: new ParseSourceSpan(startSourceSpan, endSourceSpan),
             children:
@@ -292,7 +292,7 @@ function extractInterpolationWalk(ast, options) {
       }
     }
 
-    node.children = node.clone({ children: newChildren }).children;
+    node.setChildren(newChildren);
   });
 }
 
@@ -324,10 +324,8 @@ function extractWhitespacesWalk(ast /*, options*/) {
     const isWhitespaceSensitive = isWhitespaceSensitiveNode(node);
     const isIndentationSensitive = isIndentationSensitiveNode(node);
 
-    const newNode = node.clone({
-      isWhitespaceSensitive,
-      isIndentationSensitive,
-      children: node.children
+    node.setChildren(
+      node.children
         // extract whitespace nodes
         .flatMap((child) => {
           if (child.type !== "text" || isWhitespaceSensitive) {
@@ -345,7 +343,7 @@ function extractWhitespacesWalk(ast /*, options*/) {
 
           if (text) {
             localChildren.push(
-              child.childClone({
+              child.clone({
                 type: "text",
                 value: text,
                 sourceSpan: new ParseSourceSpan(
@@ -375,11 +373,10 @@ function extractWhitespacesWalk(ast /*, options*/) {
           };
         })
         // filter whitespace nodes
-        .filter(Boolean),
-    });
-    node.children = newNode.children;
-    node.isWhitespaceSensitive = newNode.isWhitespaceSensitive;
-    node.isIndentationSensitive = newNode.isIndentationSensitive;
+        .filter(Boolean)
+    );
+    node.isWhitespaceSensitive = isWhitespaceSensitive;
+    node.isIndentationSensitive = isIndentationSensitive;
   });
 }
 
@@ -435,8 +432,8 @@ function addIsSpaceSensitiveWalk(ast, options) {
       return;
     }
 
-    node.children = node.clone({
-      children: node.children
+    node.setChildren(
+      node.children
         .map((child) => ({
           ...child,
           isLeadingSpaceSensitive: isLeadingSpaceSensitiveNode(child, options),
@@ -457,8 +454,8 @@ function addIsSpaceSensitiveWalk(ast, options) {
               ? child.isTrailingSpaceSensitive
               : children[index + 1].isLeadingSpaceSensitive &&
                 child.isTrailingSpaceSensitive,
-        })),
-    }).children;
+        }))
+    );
   });
 }
 
@@ -475,6 +472,7 @@ const PREPROCESS_PIPELINE = [
   mergeSimpleElementIntoText,
 ];
 
+const KEY_NAMES = ["i18n", "index", "parent", "prev", "next", "siblings"];
 function preprocess(ast, options) {
   // const tmpAst = ast.map((node) => node);
   // setupDeepCompare(tmpAst);
@@ -484,19 +482,42 @@ function preprocess(ast, options) {
   for (const fn of PREPROCESS_PIPELINE_WALK) {
     fn(walkAst, options);
   }
+  walkAst.walk((node) => {
+    for (const key of KEY_NAMES) {
+      if (node[key] === undefined) {
+        node[key] = undefined;
+      }
+    }
+  });
+  // return walkAst;
   walkAst.setId();
   setupDeepCompare(walkAst);
-  // walkAst.walk((node) => console.log(node));
+  // console.log(walkAst);
+  // walkAst.walk((node) => {
+  //   console.log(node);
+  //   console.log("\n\n");
+  // });
 
   for (const fn of PREPROCESS_PIPELINE) {
     ast = fn(ast, options);
   }
   const res = ast.map((node) => node);
+  ast.walk((node) => {
+    for (const key of KEY_NAMES) {
+      if (node[key] === undefined) {
+        node[key] = undefined;
+      }
+    }
+  });
   ast.setId();
   setupDeepCompare(ast);
-  ast.walk((node) => console.log(node));
+  // console.log(ast);
+  // ast.walk((node) => {
+  //   console.log(node);
+  //   console.log("\n\n");
+  // });
 
-  // assert.deepStrictEqual(walkAst, ast);
+  assert.deepStrictEqual(walkAst, ast);
   return res;
 }
 

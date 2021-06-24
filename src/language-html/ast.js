@@ -92,21 +92,10 @@ class Node {
   }
 
   /**
-   * @param {Object} [overrides]
+   * @param {Array} [children]
    */
-  childClone(overrides) {
-    console.log("fire childClone");
-    const res = new Node(overrides ? { ...this, ...overrides } : this);
-    // @ts-ignore
-    const { index, siblings, prev, next, parent } = this;
-    setNonEnumerableProperties(res, {
-      index,
-      siblings,
-      prev,
-      next,
-      parent,
-    });
-    return res;
+  setChildren(children) {
+    this._setNodes("children", children);
   }
 
   setId() {
