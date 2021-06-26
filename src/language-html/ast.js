@@ -155,7 +155,7 @@ function setNonEnumerableProperties(obj, props) {
   const descriptors = Object.fromEntries(
     Object.entries(props).map(([key, value]) => [
       key,
-      { value, enumerable: false },
+      { value, enumerable: false, configurable: true },
     ])
   );
 
